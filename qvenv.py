@@ -7,11 +7,32 @@ import subprocess
 import platform
 from datetime import datetime
 import shutil
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.table import Table
+from rich.text import Text
+from rich import box
+from rich.tree import Tree
 
-def log(message):
-    """Print a timestamped log message."""
-    timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
-    print(f"{timestamp} {message}")
+# Initialize Rich console
+console = Console()
+
+def log_info(message):
+    """Print an info message."""
+    console.print(f"  [cyan]→[/cyan] {message}")
+
+def log_success(message):
+    """Print a success message."""
+    console.print(f"  [green]✓[/green] {message}")
+
+def log_error(message):
+    """Print an error message."""
+    console.print(f"  [red]✗[/red] {message}")
+
+def log_warning(message):
+    """Print a warning message."""
+    console.print(f"  [yellow]⚠[/yellow] {message}")
 
 def find_venv_directory(quiet=False, max_depth=5):
     """Find virtual environment directory in current directory or subdirectories."""
@@ -20,7 +41,14 @@ def find_venv_directory(quiet=False, max_depth=5):
     
     current_dir = os.getcwd()
     if not quiet:
-        log(f"Searching for virtual environment in: {current_dir} (up to {max_depth} levels deep)")
+        with console.status("[cyan]Searching...", spinner="dots"):
+            result = _do_find_venv(current_dir, venv_names, max_depth)
+        return result
+    else:
+        return _do_find_venv(current_dir, venv_names, max_depth)
+
+def _do_find_venv(current_dir, venv_names, max_depth):
+    """Internal function to perform venv search."""
     
     def is_venv(path):
         """Check if a directory is a virtual environment."""
@@ -43,8 +71,7 @@ def find_venv_directory(quiet=False, max_depth=5):
             venv_path = os.path.join(directory, venv_name)
             if os.path.exists(venv_path) and is_venv(venv_path):
                 rel_path = os.path.relpath(venv_path, current_dir)
-                if not quiet:
-                    log(f"Found virtual environment: {rel_path}")
+                log_success(f"Found [cyan]{rel_path}[/cyan]")
                 return venv_path, rel_path
         
         # If not found, search subdirectories (but skip hidden dirs and common non-venv dirs)
@@ -62,8 +89,7 @@ def find_venv_directory(quiet=False, max_depth=5):
                         # Check if this directory itself is a venv
                         if entry in venv_names and is_venv(entry_path):
                             rel_path = os.path.relpath(entry_path, current_dir)
-                            if not quiet:
-                                log(f"Found virtual environment: {rel_path}")
+                            log_success(f"Found [cyan]{rel_path}[/cyan]")
                             return entry_path, rel_path
                         
                         # Recurse into subdirectory
@@ -84,9 +110,8 @@ def activate_venv(quiet=False):
     
     if not venv_path:
         if not quiet:
-            log("Error: No virtual environment found")
-            log("Searched current directory and subdirectories (5 levels deep)")
-            log("Looking for: .venv, venv, .env, env, virtualenv, .virtualenv")
+            log_error("No virtual environment found")
+            console.print("  [dim]Run[/dim] [cyan]qvenv make[/cyan] [dim]to create one[/dim]")
         return False
     
     if os.name == 'nt':  # Windows
@@ -99,16 +124,12 @@ def activate_venv(quiet=False):
                 # Just print the command for eval
                 print(activate_script)
             else:
-                log("=" * 60)
-                log(f"Virtual environment found: {venv_name}")
-                log("=" * 60)
-                log("Run this command to activate:")
-                print(f"\n{activate_script}")
-                log("\n" + "=" * 60)
+                console.print()
+                console.print(f"  [cyan]→[/cyan] Run: [bold cyan]{activate_script}[/bold cyan]")
             return True
         else:
             if not quiet:
-                log(f"Error: Activation script not found at {activate_script}")
+                log_error(f"Activation script not found")
             return False
     else:  # Unix/MacOS
         activate_script = os.path.join(venv_path, 'bin', 'activate')
@@ -118,55 +139,48 @@ def activate_venv(quiet=False):
                 # Just print the source command for eval
                 print(f"source {activate_script}")
             else:
-                log("=" * 60)
-                log(f"Virtual environment found: {venv_name}")
-                log("=" * 60)
-                log("Run this command to activate:")
-                print(f"\nsource {activate_script}")
-                log("\nOr use eval to activate automatically:")
-                log(f'  eval "$(qvenv activate --quiet)"')
-                log("=" * 60)
+                console.print()
+                console.print(f"  [cyan]→[/cyan] Run: [bold cyan]source {activate_script}[/bold cyan]")
+                console.print(f"  [dim]or:[/dim] [dim cyan]eval \"$(qvenv activate --quiet)\"[/dim cyan]")
             return True
         else:
             if not quiet:
-                log(f"Error: Activation script not found at {activate_script}")
+                log_error(f"Activation script not found at {activate_script}")
             return False
 
 def get_latest_python_version():
     """Get the latest stable Python version installed on the system."""
-    log("Checking for latest stable Python version...")
-    
-    try:
-        # Try python3 --version first
-        result = subprocess.run(
-            ["python3", "--version"],
-            capture_output=True, text=True
-        )
-        if result.returncode == 0:
-            version = result.stdout.strip().split()[1]
-            log(f"Found Python {version}")
-            return "python3", version
-    except Exception as e:
-        log(f"Error checking python3 version: {str(e)}")
-    
-    # If python3 fails, try python
-    try:
-        result = subprocess.run(
-            ["python", "--version"],
-            capture_output=True, text=True
-        )
-        if result.returncode == 0:
-            version = result.stdout.strip().split()[1]
-            log(f"Found Python {version}")
-            return "python", version
-    except Exception as e:
-        log(f"Error checking python version: {str(e)}")
-    
-    return None, None
+    with console.status("[cyan]Checking Python...", spinner="dots"):
+        try:
+            # Try python3 --version first
+            result = subprocess.run(
+                ["python3", "--version"],
+                capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                version = result.stdout.strip().split()[1]
+                log_success(f"Python [cyan]{version}[/cyan]")
+                return "python3", version
+        except Exception:
+            pass
+        
+        # If python3 fails, try python
+        try:
+            result = subprocess.run(
+                ["python", "--version"],
+                capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                version = result.stdout.strip().split()[1]
+                log_success(f"Python [cyan]{version}[/cyan]")
+                return "python", version
+        except Exception:
+            pass
+        
+        return None, None
 
 def create_venv(path, python_cmd):
     """Create a virtual environment at the specified path."""
-    log(f"Creating virtual environment at {path}...")
     
     try:
         # Check if venv module is available
@@ -176,38 +190,37 @@ def create_venv(path, python_cmd):
         )
         
         if result.returncode != 0:
-            log("Error: Python venv module not available.")
-            log("Please install it with: pip install venv")
+            log_error("Python venv module not available")
+            console.print("  [dim]Install with:[/dim] [cyan]pip install venv[/cyan]")
             return False
             
         # Create the virtual environment
-        result = subprocess.run(
-            [python_cmd, "-m", "venv", path],
-            capture_output=True, text=True
-        )
+        with console.status("[cyan]Creating...", spinner="dots"):
+            result = subprocess.run(
+                [python_cmd, "-m", "venv", path],
+                capture_output=True, text=True
+            )
         
         if result.returncode != 0:
-            log(f"Error creating virtual environment: {result.stderr}")
+            log_error(f"Failed to create: {result.stderr}")
             return False
-            
+        
+        log_success(f"Created at [cyan]{path}[/cyan]")
+        
         # Print activation instructions
-        log("=" * 60)
-        log("Virtual environment created successfully!")
-        log("=" * 60)
-        log("To activate, run:")
         if os.name == 'nt':  # Windows
             activate_cmd = f"{os.path.join(path, 'Scripts', 'activate')}"
-            print(f"\n{activate_cmd}")
         else:  # Unix/MacOS
             activate_cmd = f"source {os.path.join(path, 'bin', 'activate')}"
-            print(f"\n{activate_cmd}")
-            log("\nOr use eval:")
-            log('  eval "$(qvenv activate --quiet)"')
-        log("=" * 60)
+        
+        console.print()
+        console.print(f"  [cyan]→[/cyan] Run: [bold cyan]{activate_cmd}[/bold cyan]")
+        if os.name != 'nt':
+            console.print(f"  [dim]or:[/dim] [dim cyan]eval \"$(qvenv activate --quiet)\"[/dim cyan]")
         
         return True
     except Exception as e:
-        log(f"Error creating virtual environment: {str(e)}")
+        log_error(f"Error: {str(e)}")
         return False
 
 def find_requirements_file(max_depth=5):
@@ -216,9 +229,14 @@ def find_requirements_file(max_depth=5):
     req_files = ["requirements.txt", "requirements.pip"]
     
     current_dir = os.getcwd()
-    log("Checking for requirements file...")
-    log(f"Searching in: {current_dir} (up to {max_depth} levels deep)")
     
+    with console.status("[cyan]Searching requirements...", spinner="dots"):
+        result = _do_find_requirements(current_dir, req_files, max_depth)
+    
+    return result
+
+def _do_find_requirements(current_dir, req_files, max_depth):
+    """Internal function to search for requirements file."""
     def search_directory(directory, depth):
         """Recursively search for requirements file up to max_depth."""
         if depth > max_depth:
@@ -229,7 +247,7 @@ def find_requirements_file(max_depth=5):
             req_path = os.path.join(directory, req_file)
             if os.path.exists(req_path) and os.path.isfile(req_path):
                 rel_path = os.path.relpath(req_path, current_dir)
-                log(f"Found requirements file: {rel_path}")
+                log_success(f"Found [cyan]{rel_path}[/cyan]")
                 return req_path
         
         # Search subdirectories
@@ -262,11 +280,8 @@ def install_requirements(venv_path):
     req_file = find_requirements_file()
     
     if not req_file:
-        log("No requirements file found.")
-        log("Searched current directory and subdirectories (5 levels deep)")
+        log_warning("No requirements file found")
         return False
-    
-    log("Installing requirements...")
     
     # Get pip path based on OS
     if os.name == 'nt':  # Windows
@@ -275,20 +290,22 @@ def install_requirements(venv_path):
         pip_path = os.path.join(venv_path, 'bin', 'pip')
     
     try:
-        # Install requirements
-        result = subprocess.run(
-            [pip_path, "install", "-r", req_file],
-            capture_output=True, text=True
-        )
+        # Install requirements with a progress indicator
+        with console.status("[cyan]Installing...", spinner="dots"):
+            result = subprocess.run(
+                [pip_path, "install", "-r", req_file],
+                capture_output=True, text=True
+            )
         
         if result.returncode != 0:
-            log(f"Error installing requirements: {result.stderr}")
+            log_error(f"Installation failed")
             return False
         
-        log("Requirements installed successfully!")
+        log_success("Requirements installed")
+        
         return True
     except Exception as e:
-        log(f"Error installing requirements: {str(e)}")
+        log_error(f"Error: {str(e)}")
         return False
 
 def deactivate_venv(quiet=False):
@@ -297,12 +314,9 @@ def deactivate_venv(quiet=False):
         # Just print the command for eval
         print("deactivate")
     else:
-        log("=" * 60)
-        log("Run this command to deactivate:")
-        print("\ndeactivate")
-        log("\nOr use eval to deactivate automatically:")
-        log('  eval "$(qvenv deactivate --quiet)"')
-        log("=" * 60)
+        console.print()
+        console.print(f"  [cyan]→[/cyan] Run: [bold cyan]deactivate[/bold cyan]")
+        console.print(f"  [dim]or:[/dim] [dim cyan]eval \"$(qvenv deactivate --quiet)\"[/dim cyan]")
     return True
 
 def build_venv():
@@ -310,35 +324,19 @@ def build_venv():
     venv_path, venv_name = find_venv_directory()
     
     if not venv_path:
-        log("Error: No virtual environment found")
-        log("Searched current directory and subdirectories (5 levels deep)")
-        log("Run 'qvenv make' to create one first")
+        log_error("No virtual environment found")
+        console.print("  [dim]Run[/dim] [cyan]qvenv make[/cyan] [dim]to create one[/dim]")
         return False
     
-    log(f"Found virtual environment: {venv_name}")
-    
     # Install requirements
+    console.print()
     success = install_requirements(venv_path)
     
     if success:
-        log("=" * 60)
-        log("Build complete! Requirements installed successfully.")
-        log("=" * 60)
-        log("To activate the environment, run:")
-        
-        # Provide activation instructions
-        if os.name == 'nt':  # Windows
-            activate_script = os.path.join(venv_path, 'Scripts', 'activate')
-            print(f"\n{activate_script}")
-        else:  # Unix/MacOS
-            activate_script = os.path.join(venv_path, 'bin', 'activate')
-            print(f"\nsource {activate_script}")
-            log("\nOr use eval:")
-            log('  eval "$(qvenv activate --quiet)"')
-        log("=" * 60)
+        console.print()
+        console.print(f"  [green]✓[/green] Build complete for [cyan]{venv_name}[/cyan]")
         return True
     else:
-        log("Build failed: Could not install requirements")
         return False
 
 def remake_venv():
@@ -346,52 +344,57 @@ def remake_venv():
     venv_path, venv_name = find_venv_directory()
     
     if not venv_path:
-        log("Error: No virtual environment found")
-        log("Searched current directory and subdirectories (5 levels deep)")
-        log("Run 'qvenv make' to create one first")
+        log_error("No virtual environment found")
+        console.print("  [dim]Run[/dim] [cyan]qvenv make[/cyan] [dim]to create one[/dim]")
         return False
     
-    log(f"Found virtual environment: {venv_name}")
-    log("Remaking virtual environment...")
+    console.print()
+    log_info(f"Remaking [cyan]{venv_name}[/cyan]")
     
     # Remove existing venv
-    log(f"Removing existing virtual environment: {venv_name}")
-    try:
-        shutil.rmtree(venv_path)
-        log("Removed successfully")
-    except Exception as e:
-        log(f"Error removing existing environment: {str(e)}")
-        return False
+    with console.status("[yellow]Removing...", spinner="dots"):
+        try:
+            shutil.rmtree(venv_path)
+            log_success("Removed")
+        except Exception as e:
+            log_error(f"Error: {str(e)}")
+            return False
     
     # Get the latest Python version
     python_cmd, version = get_latest_python_version()
     if not python_cmd:
-        log("Error: Could not find Python installation")
+        log_error("Python not found")
         return False
     
+    console.print()
     # Recreate the virtual environment
     success = create_venv(venv_path, python_cmd)
     if not success:
-        log("Error: Failed to recreate virtual environment")
         return False
     
+    console.print()
     # Install requirements
     install_success = install_requirements(venv_path)
+    
     if install_success:
-        log("=" * 60)
-        log("Remake complete! Virtual environment recreated with requirements.")
-        log("=" * 60)
+        console.print()
+        console.print(f"  [green]✓[/green] Remake complete for [cyan]{venv_name}[/cyan]")
     else:
-        log("=" * 60)
-        log("Virtual environment recreated, but no requirements file found.")
-        log("=" * 60)
+        console.print()
+        console.print(f"  [yellow]⚠[/yellow] No requirements to install")
     
     return True
 
 def main():
     """Main execution function."""
+    # Display minimal header
+    console.print()
+    console.print("[bold cyan]qvenv[/bold cyan]", justify="left")
+    console.print()
+    
     parser = argparse.ArgumentParser(
-        description="Quick tool to setup and manage Python virtual environments"
+        description="Python virtual environment manager",
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
     # Create subparsers for different commands
@@ -465,23 +468,25 @@ def main():
         # Check if the directory already exists
         if os.path.exists(path):
             if args.force:
-                log(f"Removing existing directory: {path}")
-                try:
-                    shutil.rmtree(path)
-                except Exception as e:
-                    log(f"Error removing existing directory: {str(e)}")
-                    return 1
+                with console.status("[yellow]Removing...", spinner="dots"):
+                    try:
+                        shutil.rmtree(path)
+                        log_success("Removed existing")
+                    except Exception as e:
+                        log_error(f"Error: {str(e)}")
+                        return 1
             else:
-                log(f"Error: Directory already exists: {path}")
-                log("Use -f/--force to force recreation")
+                log_error(f"Directory exists: [yellow]{path}[/yellow]")
+                console.print("  [dim]Use[/dim] [cyan]-f[/cyan] [dim]to force recreation[/dim]")
                 return 1
         
         # Get the latest Python version
         python_cmd, version = get_latest_python_version()
         if not python_cmd:
-            log("Error: Could not find Python installation")
+            log_error("Python not found")
             return 1
-            
+        
+        console.print()
         # Create the virtual environment
         success = create_venv(path, python_cmd)
         if not success:
@@ -489,9 +494,8 @@ def main():
         
         # Install requirements if --complete is specified
         if args.complete:
+            console.print()
             install_success = install_requirements(path)
-            if not install_success:
-                log("Warning: Failed to install requirements")
         
         return 0
     
