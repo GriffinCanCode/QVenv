@@ -1,140 +1,204 @@
-# QVenv - Quick Python Virtual Environment Manager
+# QVenv - Python Virtual Environment Manager
 
-A simple, efficient tool for creating Python virtual environments with automatic requirements detection and installation.
+[![PyPI version](https://badge.fury.io/py/qvenv.svg)](https://badge.fury.io/py/qvenv)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/qvenv)](https://pypi.org/project/qvenv/)
 
-## 🚀 Features
+A command-line tool for managing Python virtual environments with automatic requirements detection and installation.
 
-- **Automatic Python Detection**: Finds the latest stable Python version on your system
-- **Smart Requirements Installation**: Detects and installs from `requirements.txt` or `requirements.pip`
-- **Cross-Platform Support**: Works on Windows, macOS, and Linux
-- **Global Installation**: Easy symlink creation for system-wide access
-- **Force Recreation**: Option to recreate existing environments
-- **Comprehensive Logging**: Timestamped output for better debugging
+**PyPI Package:** https://pypi.org/project/qvenv/
 
-## 📦 Installation
+## Features
 
-### Quick Install
+- Automatic Python version detection
+- Requirements file detection and installation (requirements.txt, requirements.pip)
+- Cross-platform support (Windows, macOS, Linux)
+- Environment activation helpers
+- Environment recreation and rebuilding
+- Timestamped logging
+
+## Installation
+
+### PyPI Installation (Recommended)
+
+Install qvenv directly from PyPI:
+
 ```bash
-# Clone and make executable
+pip install qvenv
+```
+
+or for user installation:
+
+```bash
+pip install --user qvenv
+```
+
+After installation, the `qvenv` command will be available globally.
+
+### Development Installation
+
+Clone the repository and use the installation script:
+
+```bash
 git clone https://github.com/GriffinCanCode/QVenv.git
 cd QVenv
+./install.sh
+```
+
+The script will automatically:
+- Make `qvenv.py` executable
+- Create a symlink in `/usr/local/bin` or `~/.local/bin`
+- Provide instructions if PATH configuration is needed
+
+### Manual Installation
+
+```bash
 chmod +x qvenv.py
-
-# Create global symlink (optional)
-python3 qvenv.py --install
+ln -s "$(pwd)/qvenv.py" /usr/local/bin/qvenv
 ```
 
-### Manual Install
-```bash
-# Copy to a directory in your PATH
-cp qvenv.py /usr/local/bin/qvenv
-chmod +x /usr/local/bin/qvenv
-```
+## Usage
 
-## 🛠️ Usage
+### Commands
 
-### Basic Usage
-```bash
-# Create virtual environment in ./venv
-qvenv
-
-# Create virtual environment in custom path
-qvenv my_project_env
-
-# Force recreate existing environment
-qvenv -f venv
-
-# Create environment and install requirements
-qvenv --complete my_env
-```
-
-### Command Options
-
-| Option | Description |
-|--------|-------------|
-| `path` | Path for the virtual environment (default: `./venv`) |
-| `-f, --force` | Force recreation if environment already exists |
-| `--install` | Create symlink in PATH for global access |
-| `--complete` | Auto-detect and install requirements after creation |
-
-### Examples
+**qvenv make [path]**
+Create a new virtual environment.
 
 ```bash
-# Standard workflow
-qvenv project_env
-source project_env/bin/activate  # Unix/macOS
-# or
-project_env\Scripts\activate     # Windows
-
-# Complete setup with requirements
-qvenv --complete --force production_env
-
-# Global installation
-qvenv --install
+qvenv make                    # Creates ./venv
+qvenv make myenv              # Creates ./myenv
+qvenv make myenv -f           # Force recreate if exists
+qvenv make myenv --complete   # Create and install requirements
 ```
 
-## 🔧 Requirements Detection
+**qvenv activate**
+Display activation instructions for the nearest virtual environment.
 
-QVenv automatically searches for and installs from:
-- `requirements.txt`
-- `requirements.pip`
+```bash
+qvenv activate
+```
 
-The tool will find the first available requirements file and install all packages in the newly created virtual environment.
+**qvenv deactivate**
+Display deactivation instructions.
 
-## 🖥️ Platform Support
+```bash
+qvenv deactivate
+```
 
-### Unix/macOS
-- Uses `python3` command by default
+**qvenv install**
+Install requirements from requirements.txt or requirements.pip into the existing virtual environment.
+
+```bash
+qvenv install
+```
+
+**qvenv build**
+Alias for `qvenv install`. Installs requirements into the existing virtual environment.
+
+```bash
+qvenv build
+```
+
+**qvenv remake**
+Remove and recreate the virtual environment with fresh packages from requirements file.
+
+```bash
+qvenv remake
+```
+
+### Options
+
+#### make command options:
+- `path` - Path for the virtual environment (default: venv)
+- `-f, --force` - Force recreation if environment already exists
+- `--complete` - Detect and install requirements after creation
+
+## Typical Workflow
+
+```bash
+# Create a new virtual environment
+qvenv make
+
+# Activate it (copy and run the command shown)
+source venv/bin/activate
+
+# Install dependencies
+qvenv install
+
+# Later, rebuild environment if needed
+qvenv remake
+```
+
+## Requirements Detection
+
+The tool searches for requirements files in this order:
+1. `requirements.txt`
+2. `requirements.pip`
+
+The first available file will be used for package installation.
+
+## Platform Support
+
+### Unix and macOS
+- Uses `python3` by default
 - Activation: `source venv/bin/activate`
-- Symlink location: `~/.local/bin/qvenv` or `/usr/local/bin/qvenv`
+- Symlink location: `/usr/local/bin/qvenv` or `~/.local/bin/qvenv`
 
 ### Windows
-- Falls back to `python` if `python3` unavailable
+- Falls back to `python` if `python3` is unavailable
 - Activation: `venv\Scripts\activate`
-- Manual PATH addition required
+- Manual PATH configuration may be required
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Python 3.6 or higher
-- `venv` module (usually included with Python)
-- Write permissions for target directory
+- Python `venv` module (typically included with Python)
+- Write permissions for the target directory
 
-## 🔍 Troubleshooting
+## Troubleshooting
 
-### Common Issues
+### Python venv module not available
 
-**"Python venv module not available"**
 ```bash
-# Install venv module
-pip install venv
-# or on some systems
 python3 -m pip install --user virtualenv
 ```
 
-**"Permission denied" on symlink creation**
+### Permission denied during installation
+
 ```bash
-# Run with appropriate permissions
-sudo python3 qvenv.py --install
-# or manually copy to PATH directory
+sudo ./install.sh
 ```
 
-**Virtual environment not activating**
-- Ensure you're using the correct activation command for your platform
-- Check that the virtual environment was created successfully
-- Verify Python installation and PATH configuration
+Or manually specify a user directory:
 
-## 🤝 Contributing
+```bash
+ln -s "$(pwd)/qvenv.py" "$HOME/.local/bin/qvenv"
+export PATH="$PATH:$HOME/.local/bin"
+```
+
+### Virtual environment not found
+
+Ensure you're in a directory containing one of these:
+- `.venv`
+- `venv`
+- `.env`
+- `env`
+- `virtualenv`
+- `.virtualenv`
+
+## Contributing
+
+Contributions are welcome. Please follow these steps:
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+2. Create a feature branch (`git checkout -b feature/feature-name`)
+3. Commit your changes (`git commit -m 'Add feature'`)
+4. Push to the branch (`git push origin feature/feature-name`)
 5. Open a Pull Request
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the LICENSE file for details.
 
-## 🔗 Related Tools
+## Related Tools
 
-Part of the [GSuite](https://github.com/GriffinCanCode/GSuite) collection of development tools. 
+Part of the GSuite collection of development tools. 

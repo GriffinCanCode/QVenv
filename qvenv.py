@@ -224,89 +224,146 @@ def install_requirements(venv_path):
         log(f"Error installing requirements: {str(e)}")
         return False
 
-def create_symlink():
-    """Create a symlink to the script in a directory that's in the user's PATH."""
-    script_path = os.path.abspath(__file__)
-    
+def deactivate_venv():
+    """Provide instructions to deactivate the virtual environment."""
     if os.name == 'nt':  # Windows
-        log("Symlink creation on Windows requires administrator privileges")
-        log("Please manually add this script to your PATH")
-        return False
+        log("=" * 60)
+        log("To deactivate the virtual environment on Windows:")
+        log("  deactivate")
+        log("=" * 60)
     else:  # Unix/MacOS
-        # Common locations for executables
-        bin_dirs = ['/usr/local/bin', os.path.expanduser('~/.local/bin')]
+        log("=" * 60)
+        log("To deactivate the virtual environment:")
+        log("  deactivate")
+        log("=" * 60)
+        print("\n# Copy and paste this command:")
+        print("deactivate")
+    return True
+
+def build_venv():
+    """Find the virtual environment and install requirements."""
+    venv_path, venv_name = find_venv_directory()
+    
+    if not venv_path:
+        log("Error: No virtual environment found in current directory")
+        log("Run 'qvenv make' to create one first")
+        return False
+    
+    log(f"Found virtual environment: {venv_name}")
+    
+    # Install requirements
+    success = install_requirements(venv_path)
+    
+    if success:
+        log("=" * 60)
+        log("Build complete! Requirements installed successfully.")
+        log("=" * 60)
         
-        # Check which directory exists and is in PATH
-        target_dir = None
-        for d in bin_dirs:
-            if os.path.exists(d) and d in os.environ.get('PATH', '').split(':'):
-                target_dir = d
-                break
-        
-        # If no suitable directory found, use ~/.local/bin and create if necessary
-        if not target_dir:
-            target_dir = os.path.expanduser('~/.local/bin')
-            if not os.path.exists(target_dir):
-                os.makedirs(target_dir)
-                log(f"Created directory: {target_dir}")
-                log(f"Remember to add {target_dir} to your PATH")
-        
-        # Create the symlink
-        symlink_path = os.path.join(target_dir, 'qvenv')
-        
-        # Check if symlink already exists
-        if os.path.exists(symlink_path):
-            log(f"Symlink already exists at {symlink_path}")
-            return True
-        
-        try:
-            os.symlink(script_path, symlink_path)
-            os.chmod(symlink_path, 0o755)  # Make executable
-            log(f"Symlink created at {symlink_path}")
-            
-            # Check if target_dir is in PATH
-            if target_dir not in os.environ.get('PATH', '').split(':'):
-                log(f"NOTE: {target_dir} is not in your PATH")
-                if target_dir == os.path.expanduser('~/.local/bin'):
-                    log("Consider adding it with: export PATH=$PATH:~/.local/bin")
-            
-            return True
-        except Exception as e:
-            log(f"Error creating symlink: {str(e)}")
-            return False
+        # Provide activation instructions
+        if os.name == 'nt':  # Windows
+            activate_script = os.path.join(venv_path, 'Scripts', 'activate')
+            log("To activate the environment, run:")
+            log(f"  {activate_script}")
+        else:  # Unix/MacOS
+            activate_script = os.path.join(venv_path, 'bin', 'activate')
+            log("To activate the environment, run:")
+            log(f"  source {activate_script}")
+            print(f"\n# Copy and paste this command:")
+            print(f"source {activate_script}")
+        log("=" * 60)
+        return True
+    else:
+        log("Build failed: Could not install requirements")
+        return False
+
+def remake_venv():
+    """Remake the virtual environment by removing and recreating it with requirements."""
+    venv_path, venv_name = find_venv_directory()
+    
+    if not venv_path:
+        log("Error: No virtual environment found in current directory")
+        log("Run 'qvenv make' to create one first")
+        return False
+    
+    log(f"Found virtual environment: {venv_name}")
+    log("Remaking virtual environment...")
+    
+    # Remove existing venv
+    log(f"Removing existing virtual environment: {venv_name}")
+    try:
+        shutil.rmtree(venv_path)
+        log("Removed successfully")
+    except Exception as e:
+        log(f"Error removing existing environment: {str(e)}")
+        return False
+    
+    # Get the latest Python version
+    python_cmd, version = get_latest_python_version()
+    if not python_cmd:
+        log("Error: Could not find Python installation")
+        return False
+    
+    # Recreate the virtual environment
+    success = create_venv(venv_path, python_cmd)
+    if not success:
+        log("Error: Failed to recreate virtual environment")
+        return False
+    
+    # Install requirements
+    install_success = install_requirements(venv_path)
+    if install_success:
+        log("=" * 60)
+        log("Remake complete! Virtual environment recreated with requirements.")
+        log("=" * 60)
+    else:
+        log("=" * 60)
+        log("Virtual environment recreated, but no requirements file found.")
+        log("=" * 60)
+    
+    return True
 
 def main():
     """Main execution function."""
     parser = argparse.ArgumentParser(
-        description="Quick tool to setup a Python virtual environment with the latest stable version"
+        description="Quick tool to setup and manage Python virtual environments"
     )
     
     # Create subparsers for different commands
-    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    subparsers = parser.add_subparsers(dest='command', help='Available commands', required=True)
     
-    # Create subparser for the activate command
-    activate_parser = subparsers.add_parser('activate', help='Activate virtual environment in current directory')
-    
-    # Create subparser for the install command
-    install_parser = subparsers.add_parser('install', help='Install qvenv globally')
-    
-    # Default create command (when no subcommand is specified)
-    parser.add_argument(
+    # Create subparser for the make command
+    make_parser = subparsers.add_parser('make', help='Create a new virtual environment')
+    make_parser.add_argument(
         "path", 
         nargs="?", 
         default="venv",
         help="Path for the virtual environment (default: ./venv)"
     )
-    parser.add_argument(
+    make_parser.add_argument(
         "-f", "--force", 
         action="store_true",
         help="Force recreation if the environment already exists"
     )
-    parser.add_argument(
+    make_parser.add_argument(
         "--complete", 
         action="store_true",
         help="Detect and install requirements after creating the environment"
     )
+    
+    # Create subparser for the activate command
+    activate_parser = subparsers.add_parser('activate', help='Activate virtual environment in current directory')
+    
+    # Create subparser for the deactivate command
+    deactivate_parser = subparsers.add_parser('deactivate', help='Deactivate the current virtual environment')
+    
+    # Create subparser for the build command
+    build_parser = subparsers.add_parser('build', help='Install requirements in the existing virtual environment')
+    
+    # Create subparser for the install command (alias for build)
+    install_parser = subparsers.add_parser('install', help='Install requirements in the existing virtual environment')
+    
+    # Create subparser for the remake command
+    remake_parser = subparsers.add_parser('remake', help='Remake the virtual environment with updated packages')
     
     args = parser.parse_args()
     
@@ -314,46 +371,53 @@ def main():
     if args.command == 'activate':
         success = activate_venv()
         return 0 if success else 1
-    elif args.command == 'install':
-        success = create_symlink()
+    elif args.command == 'deactivate':
+        success = deactivate_venv()
         return 0 if success else 1
-
-    # Default behavior: create virtual environment
-    # Make path absolute if it's relative
-    path = os.path.abspath(args.path)
-    
-    # Check if the directory already exists
-    if os.path.exists(path):
-        if args.force:
-            log(f"Removing existing directory: {path}")
-            try:
-                shutil.rmtree(path)
-            except Exception as e:
-                log(f"Error removing existing directory: {str(e)}")
-                return 1
-        else:
-            log(f"Error: Directory already exists: {path}")
-            log("Use -f/--force to force recreation")
-            return 1
-    
-    # Get the latest Python version
-    python_cmd, version = get_latest_python_version()
-    if not python_cmd:
-        log("Error: Could not find Python installation")
-        return 1
+    elif args.command == 'build' or args.command == 'install':
+        success = build_venv()
+        return 0 if success else 1
+    elif args.command == 'remake':
+        success = remake_venv()
+        return 0 if success else 1
+    elif args.command == 'make':
+        # Make path absolute if it's relative
+        path = os.path.abspath(args.path)
         
-    # Create the virtual environment
-    success = create_venv(path, python_cmd)
-    if not success:
-        return 1
+        # Check if the directory already exists
+        if os.path.exists(path):
+            if args.force:
+                log(f"Removing existing directory: {path}")
+                try:
+                    shutil.rmtree(path)
+                except Exception as e:
+                    log(f"Error removing existing directory: {str(e)}")
+                    return 1
+            else:
+                log(f"Error: Directory already exists: {path}")
+                log("Use -f/--force to force recreation")
+                return 1
+        
+        # Get the latest Python version
+        python_cmd, version = get_latest_python_version()
+        if not python_cmd:
+            log("Error: Could not find Python installation")
+            return 1
+            
+        # Create the virtual environment
+        success = create_venv(path, python_cmd)
+        if not success:
+            return 1
+        
+        # Install requirements if --complete is specified
+        if args.complete:
+            install_success = install_requirements(path)
+            if not install_success:
+                log("Warning: Failed to install requirements")
+        
+        return 0
     
-    # Install requirements if --complete is specified
-    if args.complete:
-        install_success = install_requirements(path)
-        if not install_success:
-            log("Warning: Failed to install requirements")
-    
-    return 0
+    return 1
 
 if __name__ == "__main__":
     sys.exit(main()) 
