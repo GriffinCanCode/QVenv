@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qvenv"
-version = "1.0.0"
-description = "A command-line tool for managing Python virtual environments"
+version = "1.1.0"
+description = "A command-line tool for managing Python virtual environments with automatic activation"
 readme = "README.md"
-authors = [{name = "Griffin Strier", email = "griffin@gsuite.dev"}]
+authors = [{name = "Griffin Strier", email = "griffincancode@gmail.com"}]
 license = {text = "MIT"}
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -40,5 +40,5 @@ qvenv = "qvenv:main"
 py-modules = ["qvenv"]
 
 [tool.setuptools.package-data]
-"*" = ["install.sh"]
+"*" = ["install.sh", "qvenv.sh"]
 

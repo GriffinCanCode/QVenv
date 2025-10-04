@@ -13,13 +13,14 @@ def log(message):
     timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
     print(f"{timestamp} {message}")
 
-def find_venv_directory():
+def find_venv_directory(quiet=False):
     """Find virtual environment directory in current directory."""
     # Common virtual environment directory names
     venv_names = ['.venv', 'venv', '.env', 'env', 'virtualenv', '.virtualenv']
     
     current_dir = os.getcwd()
-    log(f"Searching for virtual environment in: {current_dir}")
+    if not quiet:
+        log(f"Searching for virtual environment in: {current_dir}")
     
     for venv_name in venv_names:
         venv_path = os.path.join(current_dir, venv_name)
@@ -33,18 +34,20 @@ def find_venv_directory():
                 python_exe = os.path.join(venv_path, 'bin', 'python')
             
             if os.path.exists(activate_script) or os.path.exists(python_exe):
-                log(f"Found virtual environment: {venv_name}")
+                if not quiet:
+                    log(f"Found virtual environment: {venv_name}")
                 return venv_path, venv_name
     
     return None, None
 
-def activate_venv():
+def activate_venv(quiet=False):
     """Activate the virtual environment."""
-    venv_path, venv_name = find_venv_directory()
+    venv_path, venv_name = find_venv_directory(quiet=quiet)
     
     if not venv_path:
-        log("Error: No virtual environment found in current directory")
-        log("Searched for: .venv, venv, .env, env, virtualenv, .virtualenv")
+        if not quiet:
+            log("Error: No virtual environment found in current directory")
+            log("Searched for: .venv, venv, .env, env, virtualenv, .virtualenv")
         return False
     
     if os.name == 'nt':  # Windows
@@ -53,55 +56,41 @@ def activate_venv():
             activate_script = os.path.join(venv_path, 'Scripts', 'activate')
         
         if os.path.exists(activate_script):
-            log("=" * 60)
-            log(f"Activating virtual environment: {venv_name}")
-            log("=" * 60)
-            log("On Windows, run this command:")
-            log(f"  {activate_script}")
-            log("=" * 60)
+            if quiet:
+                # Just print the command for eval
+                print(activate_script)
+            else:
+                log("=" * 60)
+                log(f"Virtual environment found: {venv_name}")
+                log("=" * 60)
+                log("Run this command to activate:")
+                print(f"\n{activate_script}")
+                log("\n" + "=" * 60)
             return True
         else:
-            log(f"Error: Activation script not found at {activate_script}")
+            if not quiet:
+                log(f"Error: Activation script not found at {activate_script}")
             return False
     else:  # Unix/MacOS
         activate_script = os.path.join(venv_path, 'bin', 'activate')
         
         if os.path.exists(activate_script):
-            log("=" * 60)
-            log(f"Activating virtual environment: {venv_name}")
-            log("=" * 60)
-            
-            # Create a temporary shell script that can be sourced
-            temp_script = "/tmp/qvenv_activate.sh"
-            try:
-                with open(temp_script, 'w') as f:
-                    f.write(f"#!/bin/bash\n")
-                    f.write(f"source {activate_script}\n")
-                    f.write(f"echo 'Virtual environment {venv_name} activated!'\n")
-                    f.write(f"echo 'Python: '$(which python)\n")
-                    f.write(f"echo 'Pip: '$(which pip)\n")
-                
-                os.chmod(temp_script, 0o755)
-                
-                log("To activate the virtual environment, run:")
-                log(f"  source {temp_script}")
-                log("")
-                log("Or manually run:")
-                log(f"  source {venv_name}/bin/activate")
-                log("=" * 60)
-                
-                # Also print just the source command for easy copying
-                print(f"\n# Copy and paste this command:")
+            if quiet:
+                # Just print the source command for eval
                 print(f"source {activate_script}")
-                
-                return True
-            except Exception as e:
-                log(f"Error creating activation script: {str(e)}")
-                log("Manual activation command:")
-                log(f"  source {activate_script}")
-                return True
+            else:
+                log("=" * 60)
+                log(f"Virtual environment found: {venv_name}")
+                log("=" * 60)
+                log("Run this command to activate:")
+                print(f"\nsource {activate_script}")
+                log("\nOr use eval to activate automatically:")
+                log(f'  eval "$(qvenv activate --quiet)"')
+                log("=" * 60)
+            return True
         else:
-            log(f"Error: Activation script not found at {activate_script}")
+            if not quiet:
+                log(f"Error: Activation script not found at {activate_script}")
             return False
 
 def get_latest_python_version():
@@ -163,16 +152,18 @@ def create_venv(path, python_cmd):
             return False
             
         # Print activation instructions
-        if os.name == 'nt':  # Windows
-            activate_cmd = f"{os.path.join(path, 'Scripts', 'activate')}"
-        else:  # Unix/MacOS
-            activate_cmd = f"source {os.path.join(path, 'bin', 'activate')}"
-            
         log("=" * 60)
         log("Virtual environment created successfully!")
         log("=" * 60)
-        log(f"To activate, run:")
-        log(f"  {activate_cmd}")
+        log("To activate, run:")
+        if os.name == 'nt':  # Windows
+            activate_cmd = f"{os.path.join(path, 'Scripts', 'activate')}"
+            print(f"\n{activate_cmd}")
+        else:  # Unix/MacOS
+            activate_cmd = f"source {os.path.join(path, 'bin', 'activate')}"
+            print(f"\n{activate_cmd}")
+            log("\nOr use eval:")
+            log('  eval "$(qvenv activate --quiet)"')
         log("=" * 60)
         
         return True
@@ -224,20 +215,18 @@ def install_requirements(venv_path):
         log(f"Error installing requirements: {str(e)}")
         return False
 
-def deactivate_venv():
+def deactivate_venv(quiet=False):
     """Provide instructions to deactivate the virtual environment."""
-    if os.name == 'nt':  # Windows
-        log("=" * 60)
-        log("To deactivate the virtual environment on Windows:")
-        log("  deactivate")
-        log("=" * 60)
-    else:  # Unix/MacOS
-        log("=" * 60)
-        log("To deactivate the virtual environment:")
-        log("  deactivate")
-        log("=" * 60)
-        print("\n# Copy and paste this command:")
+    if quiet:
+        # Just print the command for eval
         print("deactivate")
+    else:
+        log("=" * 60)
+        log("Run this command to deactivate:")
+        print("\ndeactivate")
+        log("\nOr use eval to deactivate automatically:")
+        log('  eval "$(qvenv deactivate --quiet)"')
+        log("=" * 60)
     return True
 
 def build_venv():
@@ -258,18 +247,17 @@ def build_venv():
         log("=" * 60)
         log("Build complete! Requirements installed successfully.")
         log("=" * 60)
+        log("To activate the environment, run:")
         
         # Provide activation instructions
         if os.name == 'nt':  # Windows
             activate_script = os.path.join(venv_path, 'Scripts', 'activate')
-            log("To activate the environment, run:")
-            log(f"  {activate_script}")
+            print(f"\n{activate_script}")
         else:  # Unix/MacOS
             activate_script = os.path.join(venv_path, 'bin', 'activate')
-            log("To activate the environment, run:")
-            log(f"  source {activate_script}")
-            print(f"\n# Copy and paste this command:")
-            print(f"source {activate_script}")
+            print(f"\nsource {activate_script}")
+            log("\nOr use eval:")
+            log('  eval "$(qvenv activate --quiet)"')
         log("=" * 60)
         return True
     else:
@@ -352,9 +340,19 @@ def main():
     
     # Create subparser for the activate command
     activate_parser = subparsers.add_parser('activate', help='Activate virtual environment in current directory')
+    activate_parser.add_argument(
+        "-q", "--quiet",
+        action="store_true",
+        help="Output only the command (for use with eval)"
+    )
     
     # Create subparser for the deactivate command
     deactivate_parser = subparsers.add_parser('deactivate', help='Deactivate the current virtual environment')
+    deactivate_parser.add_argument(
+        "-q", "--quiet",
+        action="store_true",
+        help="Output only the command (for use with eval)"
+    )
     
     # Create subparser for the build command
     build_parser = subparsers.add_parser('build', help='Install requirements in the existing virtual environment')
@@ -369,10 +367,12 @@ def main():
     
     # Handle subcommands
     if args.command == 'activate':
-        success = activate_venv()
+        quiet = getattr(args, 'quiet', False)
+        success = activate_venv(quiet=quiet)
         return 0 if success else 1
     elif args.command == 'deactivate':
-        success = deactivate_venv()
+        quiet = getattr(args, 'quiet', False)
+        success = deactivate_venv(quiet=quiet)
         return 0 if success else 1
     elif args.command == 'build' or args.command == 'install':
         success = build_venv()
