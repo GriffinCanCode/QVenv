@@ -10,6 +10,7 @@ A command-line tool for managing Python virtual environments with automatic requ
 ## Features
 
 - **Automatic activation/deactivation** (when sourcing `qvenv.sh`)
+- **Recursive venv search** (searches up to 5 levels deep in subdirectories)
 - Automatic Python version detection
 - Requirements file detection and installation (requirements.txt, requirements.pip)
 - Cross-platform support (Windows, macOS, Linux)
@@ -238,13 +239,15 @@ export PATH="$PATH:$HOME/.local/bin"
 
 ### Virtual environment not found
 
-Ensure you're in a directory containing one of these:
+qvenv searches the current directory and up to 5 levels deep in subdirectories for:
 - `.venv`
 - `venv`
 - `.env`
 - `env`
 - `virtualenv`
 - `.virtualenv`
+
+Run `qvenv make` to create a new virtual environment if none exists.
 
 ## Contributing
 

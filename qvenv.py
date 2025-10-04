@@ -13,32 +13,70 @@ def log(message):
     timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
     print(f"{timestamp} {message}")
 
-def find_venv_directory(quiet=False):
-    """Find virtual environment directory in current directory."""
+def find_venv_directory(quiet=False, max_depth=5):
+    """Find virtual environment directory in current directory or subdirectories."""
     # Common virtual environment directory names
-    venv_names = ['.venv', 'venv', '.env', 'env', 'virtualenv', '.virtualenv']
+    venv_names = ['.venv', 'venv', 'env', 'virtualenv', '.virtualenv']
     
     current_dir = os.getcwd()
     if not quiet:
-        log(f"Searching for virtual environment in: {current_dir}")
+        log(f"Searching for virtual environment in: {current_dir} (up to {max_depth} levels deep)")
     
-    for venv_name in venv_names:
-        venv_path = os.path.join(current_dir, venv_name)
-        if os.path.exists(venv_path):
-            # Check if it's actually a virtual environment
-            if os.name == 'nt':  # Windows
-                activate_script = os.path.join(venv_path, 'Scripts', 'activate')
-                python_exe = os.path.join(venv_path, 'Scripts', 'python.exe')
-            else:  # Unix/MacOS
-                activate_script = os.path.join(venv_path, 'bin', 'activate')
-                python_exe = os.path.join(venv_path, 'bin', 'python')
-            
-            if os.path.exists(activate_script) or os.path.exists(python_exe):
+    def is_venv(path):
+        """Check if a directory is a virtual environment."""
+        if os.name == 'nt':  # Windows
+            activate_script = os.path.join(path, 'Scripts', 'activate')
+            python_exe = os.path.join(path, 'Scripts', 'python.exe')
+        else:  # Unix/MacOS
+            activate_script = os.path.join(path, 'bin', 'activate')
+            python_exe = os.path.join(path, 'bin', 'python')
+        
+        return os.path.exists(activate_script) or os.path.exists(python_exe)
+    
+    def search_directory(directory, depth):
+        """Recursively search for venv in directory up to max_depth."""
+        if depth > max_depth:
+            return None, None
+        
+        # First check current directory for common venv names
+        for venv_name in venv_names:
+            venv_path = os.path.join(directory, venv_name)
+            if os.path.exists(venv_path) and is_venv(venv_path):
+                rel_path = os.path.relpath(venv_path, current_dir)
                 if not quiet:
-                    log(f"Found virtual environment: {venv_name}")
-                return venv_path, venv_name
+                    log(f"Found virtual environment: {rel_path}")
+                return venv_path, rel_path
+        
+        # If not found, search subdirectories (but skip hidden dirs and common non-venv dirs)
+        if depth < max_depth:
+            try:
+                for entry in os.listdir(directory):
+                    # Skip hidden directories and common non-venv directories
+                    if entry.startswith('.') and entry not in venv_names:
+                        continue
+                    if entry in ['node_modules', 'build', 'dist', '__pycache__', 'target', '.git']:
+                        continue
+                    
+                    entry_path = os.path.join(directory, entry)
+                    if os.path.isdir(entry_path):
+                        # Check if this directory itself is a venv
+                        if entry in venv_names and is_venv(entry_path):
+                            rel_path = os.path.relpath(entry_path, current_dir)
+                            if not quiet:
+                                log(f"Found virtual environment: {rel_path}")
+                            return entry_path, rel_path
+                        
+                        # Recurse into subdirectory
+                        venv_path, venv_name = search_directory(entry_path, depth + 1)
+                        if venv_path:
+                            return venv_path, venv_name
+            except (PermissionError, OSError):
+                # Skip directories we can't access
+                pass
+        
+        return None, None
     
-    return None, None
+    return search_directory(current_dir, 0)
 
 def activate_venv(quiet=False):
     """Activate the virtual environment."""
@@ -46,8 +84,9 @@ def activate_venv(quiet=False):
     
     if not venv_path:
         if not quiet:
-            log("Error: No virtual environment found in current directory")
-            log("Searched for: .venv, venv, .env, env, virtualenv, .virtualenv")
+            log("Error: No virtual environment found")
+            log("Searched current directory and subdirectories (5 levels deep)")
+            log("Looking for: .venv, venv, .env, env, virtualenv, .virtualenv")
         return False
     
     if os.name == 'nt':  # Windows
@@ -171,25 +210,62 @@ def create_venv(path, python_cmd):
         log(f"Error creating virtual environment: {str(e)}")
         return False
 
-def install_requirements(venv_path):
-    """Detect and install requirements file in the virtual environment."""
-    log("Checking for requirements file...")
-    
+def find_requirements_file(max_depth=5):
+    """Find requirements file in current directory or subdirectories."""
     # Common requirements file names
     req_files = ["requirements.txt", "requirements.pip"]
     
-    # Find the first existing requirements file
-    req_file = None
-    for file in req_files:
-        if os.path.exists(file):
-            req_file = file
-            break
+    current_dir = os.getcwd()
+    log("Checking for requirements file...")
+    log(f"Searching in: {current_dir} (up to {max_depth} levels deep)")
+    
+    def search_directory(directory, depth):
+        """Recursively search for requirements file up to max_depth."""
+        if depth > max_depth:
+            return None
+        
+        # Check current directory for requirements files
+        for req_file in req_files:
+            req_path = os.path.join(directory, req_file)
+            if os.path.exists(req_path) and os.path.isfile(req_path):
+                rel_path = os.path.relpath(req_path, current_dir)
+                log(f"Found requirements file: {rel_path}")
+                return req_path
+        
+        # Search subdirectories
+        if depth < max_depth:
+            try:
+                for entry in os.listdir(directory):
+                    # Skip hidden directories and common non-project directories
+                    if entry.startswith('.'):
+                        continue
+                    if entry in ['node_modules', 'build', 'dist', '__pycache__', 'target', 
+                                 'venv', '.venv', 'env', '.env', 'virtualenv', '.virtualenv']:
+                        continue
+                    
+                    entry_path = os.path.join(directory, entry)
+                    if os.path.isdir(entry_path):
+                        req_path = search_directory(entry_path, depth + 1)
+                        if req_path:
+                            return req_path
+            except (PermissionError, OSError):
+                # Skip directories we can't access
+                pass
+        
+        return None
+    
+    return search_directory(current_dir, 0)
+
+def install_requirements(venv_path):
+    """Detect and install requirements file in the virtual environment."""
+    # Find requirements file (searches recursively)
+    req_file = find_requirements_file()
     
     if not req_file:
         log("No requirements file found.")
+        log("Searched current directory and subdirectories (5 levels deep)")
         return False
     
-    log(f"Found requirements file: {req_file}")
     log("Installing requirements...")
     
     # Get pip path based on OS
@@ -234,7 +310,8 @@ def build_venv():
     venv_path, venv_name = find_venv_directory()
     
     if not venv_path:
-        log("Error: No virtual environment found in current directory")
+        log("Error: No virtual environment found")
+        log("Searched current directory and subdirectories (5 levels deep)")
         log("Run 'qvenv make' to create one first")
         return False
     
@@ -269,7 +346,8 @@ def remake_venv():
     venv_path, venv_name = find_venv_directory()
     
     if not venv_path:
-        log("Error: No virtual environment found in current directory")
+        log("Error: No virtual environment found")
+        log("Searched current directory and subdirectories (5 levels deep)")
         log("Run 'qvenv make' to create one first")
         return False
     
